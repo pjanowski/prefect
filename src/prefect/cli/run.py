@@ -415,6 +415,15 @@ See `prefect run --help` for more details on the options.
     ),
     default=None,
 )
+@click.option(
+    "--execute",
+    "-e",
+    help=(
+        "Execute the flow run in this process without an agent. If this process exits, "
+        "the flow run will be marked as 'Failed'."
+    ),
+    is_flag=True,
+)
 # Display settings ---------------------------------------------------------------------
 @click.option(
     "--quiet",
@@ -438,12 +447,6 @@ See `prefect run --help` for more details on the options.
     help="Wait for the flow run to finish executing and display status information.",
     is_flag=True,
 )
-@click.option(
-    "--execute",
-    "-e",
-    help="Execute the flow run in this process without an agent.",
-    is_flag=True,
-)
 @handle_terminal_error
 def run(
     ctx,
@@ -455,12 +458,12 @@ def run(
     labels,
     context_vars,
     params,
+    execute,
     log_level,
     param_file,
     run_name,
     quiet,
     no_logs,
-    execute,
     watch,
 ):
     """Run a flow"""
