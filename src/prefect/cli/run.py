@@ -4,6 +4,7 @@ import os
 import runpy
 import sys
 import textwrap
+import uuid
 import time
 from contextlib import contextmanager
 from functools import partial
@@ -17,6 +18,7 @@ from tabulate import tabulate
 import prefect
 from prefect.backend.flow import FlowView
 from prefect.backend.flow_run import FlowRunView, watch_flow_run
+from prefect.backend.execution import execute_flow_run_in_subprocess
 from prefect.cli.build_register import (
     TerminalError,
     handle_terminal_error,
@@ -25,6 +27,7 @@ from prefect.cli.build_register import (
 from prefect.client import Client
 from prefect.utilities.graphql import EnumValue, with_args
 from prefect.utilities.importtools import import_object
+from prefect.utilities.logging import temporary_logger_config
 
 
 @contextmanager
@@ -435,6 +438,7 @@ See `prefect run --help` for more details on the options.
     help="Wait for the flow run to finish executing and display status information.",
     is_flag=True,
 )
+@click.option("--agentless", is_flag=True)
 @handle_terminal_error
 def run(
     ctx,
@@ -451,6 +455,7 @@ def run(
     run_name,
     quiet,
     no_logs,
+    agentless,
     watch,
 ):
     """Run a flow"""
@@ -553,8 +558,6 @@ def run(
             quiet_echo(run_info, nl=False)
 
         quiet_echo("Running flow locally...")
-        from prefect.utilities.logging import temporary_logger_config
-
         with temporary_logger_config(
             level=log_level,
             stream_fmt="└── %(asctime)s | %(levelname)-7s | %(message)s",
@@ -595,6 +598,10 @@ def run(
         run_config.env["PREFECT__LOGGING__LEVEL"] = log_level
     else:
         run_config = None
+
+    if agentless:
+        # Add a random label to prevent an agent from picking up this run
+        labels.append(f"agentless-run-{str(uuid.uuid4())[:8]}")
 
     try:  # Handle keyboard interrupts during creation
         flow_run_id = None
@@ -644,6 +651,14 @@ def run(
                         """
                 ).strip()
             )
+
+        if agentless:
+            with temporary_logger_config(
+                level=log_level,
+                stream_fmt="└── %(asctime)s | %(levelname)-7s | %(message)s",
+                stream_datefmt="%H:%M:%S",
+            ):
+                execute_flow_run_in_subprocess(flow_run_id)
 
     except KeyboardInterrupt:
         # If the user interrupts here, they will expect the flow run to be cancelled
